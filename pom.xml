@@ -3,12 +3,12 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>cs343</groupId>
-	<artifactId>photoalbum</artifactId>
+	<artifactId>internships</artifactId>
 	<version>1.0.0</version>
 	<packaging>jar</packaging>
 
 	<name>internships</name>
-	<description>simple photo album application</description>
+	<description>simple internship album application</description>
 
 	<properties>
 		<maven.compiler.source>21</maven.compiler.source>
@@ -19,7 +19,7 @@
 		<slf4j.version>2.0.18</slf4j.version>
 		<jackson.version>2.22.2</jackson.version>
 
-		<main.class>photoalbum.Main</main.class>
+		<main.class>internshipapp.Main</main.class>
 	</properties>
 
 	<dependencies>
