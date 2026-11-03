@@ -7,6 +7,6 @@ package internshipapp.domain;
 * only returns photos belonging to the current user, so every Photo already has
 * a known owner.
 */
-public record Photo(Integer id, String url, String caption) {
+public record Applicant(Integer Applicant_ID, String First_Name, String Last_Name, Integer Class_Year) {
 	
 }
