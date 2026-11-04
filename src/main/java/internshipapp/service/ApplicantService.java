@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import internshipapp.dao.ApplicantDao;
 import internshipapp.domain.Applicant;
+import internshipapp.dto.NewApplicant;
 import internshipapp.errors.NotFoundException;
 /**
 * The rules for working with photos.
@@ -53,6 +54,19 @@ public class ApplicantService {
 			throw new NotFoundException ("No Applicant with the Class Year of " + classYear);
 		}
 		return applicants;
+	}
+	
+	// Create a new Applicant and return the Applicant ID
+	public Applicant createApplicant (NewApplicant req) {
+		int newId = dao.create(req);
+		return new Applicant (newId, req.First_Name(), req.Last_Name(), req.Class_Year());
+	}
+	
+	// Delete an applicant by Applicant ID
+	public void deleteApplicant (int id) {
+		if (!dao.delete(id)) {
+			throw new NotFoundException("No Applicant with ID: " + id);
+		}
 	}
 	
 }

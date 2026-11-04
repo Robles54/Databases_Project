@@ -4,6 +4,7 @@ import static internshipapp.routes.Params.pathId;
 import java.util.List;
 
 import internshipapp.domain.Applicant;
+import internshipapp.dto.NewApplicant;
 import internshipapp.service.ApplicantService;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
@@ -22,14 +23,21 @@ public class ApplicantRoutes {
 	// Called from inside Javalin.create(config -> { ... })
 	public void register(JavalinConfig config) {
 		// STATIC STUFF HAS TO BE ADDED FIRST BEFORE DYNAMIC
+		
 		// Getting all applicants by Last Name
 		config.routes.get("/applicants/all", ctx -> getAllApplicants(ctx));
+		
 		// Getting applicants by Class year
 		config.routes.get("/applicants-classYear={id}", ctx -> getAllApplicantsByClassYear(ctx));
+		
 		// Getting applicant by Applicant ID
 		config.routes.get("/applicants/{id}", ctx -> getApplicantByID(ctx));
-
 		
+		// Creating a new Applicant
+		config.routes.post("/applicants", ctx -> createApplicant(ctx));
+
+		// Deleting an applicant by Applicant ID
+		config.routes.delete("/applicants/{id}", ctx -> deleteApplicant(ctx));
 	}
 	// GET /applicants/{id} -> 200 and the applicant
 	
@@ -52,5 +60,19 @@ public class ApplicantRoutes {
 		int id = pathId(ctx);
 		List<Applicant> allApplicantsSortClassYear = service.getAllApplicantsByClassYear(id);
 		ctx.json(allApplicantsSortClassYear);
+	}
+	
+	// Creates a new Applicant POST /applicants -> code 201 and the created Applicant ID
+	private void createApplicant(Context ctx) {
+		NewApplicant req = ctx.bodyAsClass(NewApplicant.class);
+		Applicant created = service.createApplicant(req);
+		ctx.status(201).json(created);
+	}
+	
+	// Delete /applicants/{id} -> 204
+	private void deleteApplicant(Context ctx) {
+		int id = pathId(ctx);
+		service.deleteApplicant(id);
+		ctx.status(204);
 	}
 }

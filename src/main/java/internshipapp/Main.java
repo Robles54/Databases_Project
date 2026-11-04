@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import internshipapp.dao.ApplicantDao;
+import internshipapp.dao.PostingDao;
 import internshipapp.routes.ApplicantRoutes;
 import internshipapp.routes.CurrentUser;
 import internshipapp.routes.ErrorHandler;
+import internshipapp.routes.PostingRoutes;
 import internshipapp.service.ApplicantService;
+import internshipapp.service.PostingService;
 import io.javalin.Javalin;
 import io.javalin.json.JavalinJackson;
 
@@ -23,12 +26,15 @@ public class Main {
 	public static void main(String[] args) {
 		// TODO: create DAOs
 		ApplicantDao applicantDao = new ApplicantDao();
+		PostingDao postingDao = new PostingDao();
 
 		// TODO: create services
 		ApplicantService applicantService = new ApplicantService(applicantDao);
+		PostingService postingService = new PostingService(postingDao);
 
 		// TODO: create routes
 		ApplicantRoutes applicantRoutes = new ApplicantRoutes (applicantService);
+		PostingRoutes postingRoutes = new PostingRoutes (postingService);
 
 		// Javalin 7: all configuration and routes go inside the config block
 		Javalin.create(config -> {
@@ -50,6 +56,7 @@ public class Main {
 
 			// TODO: register routes
 			applicantRoutes.register(config);
+			postingRoutes.register(config);
 			
 		}).start();
 	}
