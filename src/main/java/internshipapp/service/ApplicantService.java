@@ -4,6 +4,9 @@ import java.util.Optional;
 
 import internshipapp.dao.ApplicantDao;
 import internshipapp.domain.Applicant;
+import internshipapp.domain.ApplicantApplication;
+import internshipapp.domain.ApplicantDecision;
+import internshipapp.domain.DivisionStats;
 import internshipapp.domain.StudentHired;
 import internshipapp.dto.HireRequest;
 import internshipapp.dto.NewApplicant;
@@ -92,6 +95,41 @@ public class ApplicantService {
 				req.Intern_Title(),
 				req.Returning_Intern()
 			);
+	}
+	
+	// Get all applications for a specific Applicant ID
+	public List<ApplicantApplication> getApplicationsByApplicantId (int id) {
+		List<ApplicantApplication> applications = dao.findApplicationByApplicantID(id);
+		if (applications.isEmpty()) {
+			throw new NotFoundException ("No Applications found with Applicant ID: " + id);
+		}
+		return applications;
+	}
+	
+	// Update an existing Applicant by ID. NotFoundException if there's no such applicant.
+	public Applicant updateApplicant(int id, NewApplicant req) {
+		if (!dao.update(id, req)) {
+			throw new NotFoundException("No Applicant with id " + id);
+		}
+		return new Applicant(id, req.First_Name(), req.Last_Name(), req.Class_Year());
+	}
+
+	// Get divisions with above-average applicant demand (Aggregation + Subquery)
+	public List<DivisionStats> getHighDemandDivisions() {
+		List<DivisionStats> stats = dao.findHighDemandDivisions();
+		if (stats.isEmpty()) {
+			throw new NotFoundException("No division analytics found");
+		}
+		return stats;
+	}
+	
+	// Get all finalized applicant decisions (Hired UNION Denied)
+	public List<ApplicantDecision> getAllDecisions() {
+		List<ApplicantDecision> decisions = dao.findAllDecisions();
+		if (decisions.isEmpty()) {
+			throw new NotFoundException("No finalized applicant decisions found");
+		}
+		return decisions;
 	}
 	
 }

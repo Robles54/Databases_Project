@@ -43,25 +43,25 @@ public class PostingDao {
 	}
 	
 	// Retrieves internship postings that have no rows in INTERNSHIP_APPLICATION (Subquery).
-		public List<Posting> findUnapplied() {
-			String sql = "SELECT Posting_ID, Intern_Title, Division, Company, City, "
-					+ "Salary, Start_Date, End_Date, Accepting_Applications, "
-					+ "0 AS Application_Count "
-					+ "FROM INTERNSHIP_POSTING "
-					+ "WHERE Posting_ID NOT IN (SELECT Posting_ID FROM INTERNSHIP_APPLICATION) "
-					+ "ORDER BY Posting_ID ASC";
-			try (Connection conn = DB.getConnection();
-					PreparedStatement stmt = conn.prepareStatement(sql);
-					ResultSet rs = stmt.executeQuery()) {
-				List<Posting> postings = new ArrayList<>();
-				while (rs.next()) {
-					postings.add(toPosting(rs));
-				}
-				return postings;
-			} catch (SQLException e) {
-				throw SqlErrors.translate(e);
+	public List<Posting> findUnapplied() {
+		String sql = "SELECT Posting_ID, Intern_Title, Division, Company, City, "
+				+ "Salary, Start_Date, End_Date, Accepting_Applications, "
+				+ "0 AS Application_Count "
+				+ "FROM INTERNSHIP_POSTING "
+				+ "WHERE Posting_ID NOT IN (SELECT Posting_ID FROM INTERNSHIP_APPLICATION) "
+				+ "ORDER BY Posting_ID ASC";
+		try (Connection conn = DB.getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql);
+				ResultSet rs = stmt.executeQuery()) {
+			List<Posting> postings = new ArrayList<>();
+			while (rs.next()) {
+				postings.add(toPosting(rs));
 			}
+			return postings;
+		} catch (SQLException e) {
+			throw SqlErrors.translate(e);
 		}
+	}
 	
 	private Posting toPosting(ResultSet rs) throws SQLException {
 		return new Posting(
