@@ -48,4 +48,31 @@ public class PostingService {
 			0
 		);
 	}
+	
+	// Update an existing Internship Posting by ID. NotFoundException if there's no such posting
+	public Posting updatePosting(int id, NewPosting req) {
+		if (!dao.update(id, req)) {
+			throw new NotFoundException("No Internship Posting with id " + id);
+		}
+		return new Posting(
+				id,
+				req.Intern_Title(),
+				req.Division(),
+				req.Company(),
+				req.City(),
+				req.Salary(),
+				req.Start_Date(),
+				req.End_Date(),
+				req.Accepting_Applications(),
+				0
+			);
+	}
+	
+	// Delete an internship posting by ID. NotFoundException if there's no such posting
+	public void deletePosting(int id) {
+		if (!dao.delete(id)) {
+			throw new NotFoundException ("No internship posting with ID: " + id);
+		}
+	}
+	
 }

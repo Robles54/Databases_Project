@@ -109,4 +109,44 @@ public class PostingDao {
 			}
 		}
 	
+	// Updates the internship posting with this id. Returns true if a row was updated.
+	public boolean update(int id, NewPosting req) {
+		String sql = "UPDATE INTERNSHIP_POSTING SET "
+				+ "Intern_Title = ?, Division = ?, Company = ?, City = ?, Country = ?, "
+				+ "Technical_Skill_Required = ?, HR_Contact = ?, Salary = ?, "
+				+ "Start_Date = ?, End_Date = ?, Accepting_Applications = ? "
+				+ "WHERE Posting_ID = ?";
+		try (Connection conn = DB.getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql)) {
+			stmt.setString(1, req.Intern_Title());
+			stmt.setString(2, req.Division());
+			stmt.setString(3, req.Company());
+			stmt.setString(4, req.City());
+			stmt.setString(5, req.Country() != null ? req.Country() : "United States");
+			stmt.setString(6, req.Technical_Skill_Required());
+			stmt.setString(7, req.HR_Contact());
+			stmt.setInt(8, req.Salary());
+			stmt.setDate(9, Date.valueOf(req.Start_Date()));
+			stmt.setDate(10, Date.valueOf(req.End_Date()));
+			stmt.setBoolean(11, req.Accepting_Applications());
+			stmt.setInt(12, id);
+
+			return stmt.executeUpdate() > 0;
+		} catch (SQLException e) {
+			throw SqlErrors.translate(e);
+		}
+	}
+	
+	// Deletes the internship posting with this id. Returns true if a row is deleted
+	public boolean delete(int id) {
+		String sql = "DELETE FROM INTERNSHIP_POSTING WHERE Posting_ID = ?";
+		try (Connection conn = DB.getConnection();
+				PreparedStatement stmt = conn.prepareStatement(sql)) {
+			stmt.setInt(1, id);
+			return stmt.executeUpdate() > 0;
+		} catch (SQLException e) {
+			throw SqlErrors.translate(e);
+		}
+	}
+	
 }

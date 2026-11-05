@@ -4,6 +4,8 @@ import java.util.Optional;
 
 import internshipapp.dao.ApplicantDao;
 import internshipapp.domain.Applicant;
+import internshipapp.domain.StudentHired;
+import internshipapp.dto.HireRequest;
 import internshipapp.dto.NewApplicant;
 import internshipapp.errors.NotFoundException;
 /**
@@ -67,6 +69,29 @@ public class ApplicantService {
 		if (!dao.delete(id)) {
 			throw new NotFoundException("No Applicant with ID: " + id);
 		}
+	}
+	
+	// Hires an Applicant (updates APPLICANT and inserts into STUDENT_HIRED)
+	public StudentHired hireApplicant (int id, HireRequest req) {
+		Optional<Integer> empId = dao.hireApplicant(id, req);
+		if (empId.isEmpty()) {
+			throw new NotFoundException ("No Applicant with ID: "+ id);
+		}
+		return new StudentHired(
+				empId.get(),
+				id,
+				req.Internship_Company(),
+				req.Office_City(),
+				req.Office_State(),
+				req.Office_Country(),
+				req.Education(),
+				req.Finance(),
+				req.Health(),
+				req.Media_Communications(),
+				req.Public_Service_Law_NonProfit_NGO(),
+				req.Intern_Title(),
+				req.Returning_Intern()
+			);
 	}
 	
 }

@@ -11,6 +11,7 @@ import java.sql.Statement;
 
 import internshipapp.db.DB;
 import internshipapp.domain.Applicant;
+import internshipapp.dto.HireRequest;
 import internshipapp.dto.NewApplicant;
 /**
 * All of the SQL for the APPLICANT table.
@@ -142,4 +143,61 @@ public class ApplicantDao {
 				rs.getInt("Class_Year")
 			);
 	}
+	
+	// Updates APPLICANT status and inserts into STUDENT_HIRED in one transaction
+	// Returns the generated Emp_ID, or empty if no such Applicant_ID exists
+	public Optional<Integer> hireApplicant(int applicantId, HireRequest req) {
+		String updateSql = "UPDATE APPLICANT SET Accepted = 1, Pending = 0, Rejected = 0 WHERE Applicant_ID = ?";
+		String insertSql = "INSERT INTO STUDENT_HIRED ("
+				+ "Applicant_ID, Internship_Company, Office_City, Office_State, Office_Country, "
+				+ "Education, Finance, Health, Media_Communications, "
+				+ "Public_Service_Law_NonProfit_NGO, Intern_Title, Returning_Intern"
+				+ ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+		try (Connection conn = DB.getConnection()) {
+			conn.setAutoCommit(false);
+			try (PreparedStatement updateStmt = conn.prepareStatement(updateSql);
+					PreparedStatement insertStmt = conn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
+
+				// 1. Update APPLICANT table
+				updateStmt.setInt(1, applicantId);
+				int rowsUpdated = updateStmt.executeUpdate();
+				if (rowsUpdated == 0) {
+					conn.rollback();
+					return Optional.empty();
+				}
+
+				// 2. Insert into STUDENT_HIRED table
+				insertStmt.setInt(1, applicantId);
+				insertStmt.setString(2, req.Internship_Company());
+				insertStmt.setString(3, req.Office_City());
+				insertStmt.setString(4, req.Office_State());
+				insertStmt.setString(5, req.Office_Country());
+				insertStmt.setBoolean(6, req.Education());
+				insertStmt.setBoolean(7, req.Finance());
+				insertStmt.setBoolean(8, req.Health());
+				insertStmt.setBoolean(9, req.Media_Communications());
+				insertStmt.setBoolean(10, req.Public_Service_Law_NonProfit_NGO());
+				insertStmt.setString(11, req.Intern_Title());
+				insertStmt.setBoolean(12, req.Returning_Intern());
+
+				insertStmt.executeUpdate();
+
+				try (ResultSet keys = insertStmt.getGeneratedKeys()) {
+					keys.next();
+					int empId = keys.getInt(1);
+					conn.commit();
+					return Optional.of(empId);
+				}
+			} catch (SQLException e) {
+				conn.rollback();
+				throw e;
+			}
+		} catch (SQLException e) {
+			throw SqlErrors.translate(e);
+		}
+	}
+		
+	// Retrieves all applications and posting details for a single applicant (3 Table - Join)
+	
 }

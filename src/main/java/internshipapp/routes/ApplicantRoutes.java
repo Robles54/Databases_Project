@@ -4,6 +4,8 @@ import static internshipapp.routes.Params.pathId;
 import java.util.List;
 
 import internshipapp.domain.Applicant;
+import internshipapp.domain.StudentHired;
+import internshipapp.dto.HireRequest;
 import internshipapp.dto.NewApplicant;
 import internshipapp.service.ApplicantService;
 import io.javalin.config.JavalinConfig;
@@ -27,8 +29,8 @@ public class ApplicantRoutes {
 		// Getting all applicants by Last Name
 		config.routes.get("/applicants/all", ctx -> getAllApplicants(ctx));
 		
-		// Getting applicants by Class year
-		config.routes.get("/applicants-classYear={id}", ctx -> getAllApplicantsByClassYear(ctx));
+		// Getting applicants by Class year (/applicant?classYear={id}
+		config.routes.get("/applicant", ctx -> getAllApplicantsByClassYear(ctx));
 		
 		// Getting applicant by Applicant ID
 		config.routes.get("/applicants/{id}", ctx -> getApplicantByID(ctx));
@@ -38,6 +40,10 @@ public class ApplicantRoutes {
 
 		// Deleting an applicant by Applicant ID
 		config.routes.delete("/applicants/{id}", ctx -> deleteApplicant(ctx));
+		
+		// Hiring an Applicant (will modify both APPLICANT and STUDENT_HIRED)
+		config.routes.post("/applicant/{id}/hire", ctx -> hireApplicant(ctx));
+		
 	}
 	// GET /applicants/{id} -> 200 and the applicant
 	
@@ -55,9 +61,9 @@ public class ApplicantRoutes {
 		ctx.json(allApplicants);
 	}
 	
-	// gets all applicants by Class Year
+	// gets all applicants by Class Year (GET /applicant?classYear={id}
 	private void getAllApplicantsByClassYear(Context ctx) {
-		int id = pathId(ctx);
+		int id = ctx.queryParamAsClass("classYear", Integer.class).get();
 		List<Applicant> allApplicantsSortClassYear = service.getAllApplicantsByClassYear(id);
 		ctx.json(allApplicantsSortClassYear);
 	}
@@ -74,5 +80,13 @@ public class ApplicantRoutes {
 		int id = pathId(ctx);
 		service.deleteApplicant(id);
 		ctx.status(204);
+	}
+	
+	// POST /applicant/{id}/hire -> 201 and created the StudentHired record
+	private void hireApplicant(Context ctx) {
+		int id = pathId(ctx);
+		HireRequest req = ctx.bodyAsClass(HireRequest.class);
+		StudentHired hired = service.hireApplicant(id, req);
+		ctx.status(201).json(hired);
 	}
 }
