@@ -11,6 +11,7 @@ import java.util.List;
 
 import internshipapp.db.DB;
 import internshipapp.domain.Posting;
+import internshipapp.domain.PublicPosting;
 import internshipapp.dto.NewPosting;
 import internshipapp.errors.NotFoundException;
 
@@ -41,6 +42,40 @@ public class PostingDao {
 			throw SqlErrors.translate(e);
 		}
 	}
+	
+	// Queries the OPEN_POSTINGS_VIEW database view (hides HR_Contact and closed postings).
+		public List<PublicPosting> findAllOpenFromView() {
+			String sql = "SELECT Posting_ID, Intern_Title, Division, Company, City, Country, "
+					+ "Technical_Skill_Required, Salary, Start_Date, End_Date "
+					+ "FROM OPEN_POSTINGS_VIEW "
+					+ "ORDER BY Posting_ID ASC";
+			try (Connection conn = DB.getConnection();
+					PreparedStatement stmt = conn.prepareStatement(sql);
+					ResultSet rs = stmt.executeQuery()) {
+				List<PublicPosting> postings = new ArrayList<>();
+				while (rs.next()) {
+					postings.add(toPublicPosting(rs));
+				}
+				return postings;
+			} catch (SQLException e) {
+				throw SqlErrors.translate(e);
+			}
+		}
+
+		private PublicPosting toPublicPosting(ResultSet rs) throws SQLException {
+			return new PublicPosting(
+					rs.getInt("Posting_ID"),
+					rs.getString("Intern_Title"),
+					rs.getString("Division"),
+					rs.getString("Company"),
+					rs.getString("City"),
+					rs.getString("Country"),
+					rs.getString("Technical_Skill_Required"),
+					rs.getInt("Salary"),
+					rs.getDate("Start_Date").toLocalDate(),
+					rs.getDate("End_Date").toLocalDate()
+			);
+		}
 	
 	// Retrieves internship postings that have no rows in INTERNSHIP_APPLICATION (Subquery).
 	public List<Posting> findUnapplied() {

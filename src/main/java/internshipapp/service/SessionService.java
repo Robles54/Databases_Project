@@ -10,7 +10,6 @@ import internshipapp.dao.SessionDao;
 import internshipapp.domain.User;
 
 public class SessionService {
-	
 	private static final SecureRandom RANDOM = new SecureRandom();
 	private static final Duration SESSION_LENGTH = Duration.ofHours(8);
 

@@ -1,135 +1,206 @@
 package internshipapp.service;
+
 import java.util.List;
 import java.util.Optional;
 
 import internshipapp.dao.ApplicantDao;
+import internshipapp.dao.ApplicantDao.DecisionStatus;
+import internshipapp.dao.Transactions;
 import internshipapp.domain.Applicant;
 import internshipapp.domain.ApplicantApplication;
 import internshipapp.domain.ApplicantDecision;
 import internshipapp.domain.DivisionStats;
 import internshipapp.domain.StudentHired;
+import internshipapp.domain.User;
 import internshipapp.dto.HireRequest;
 import internshipapp.dto.NewApplicant;
+import internshipapp.errors.ConflictException;
 import internshipapp.errors.NotFoundException;
-/**
-* The rules for working with photos.
-*
-* Knows nothing about HTTP: it takes plain values and returns domain objects,
-* and reports failures by throwing the application's exceptions.
-*/
+import internshipapp.errors.ValidationException;
+
 public class ApplicantService {
 	private final ApplicantDao dao;
+
 	public ApplicantService(ApplicantDao dao) {
 		this.dao = dao;
 	}
-	// One of username's photos. NotFoundException if there's no such
-	// photo or it belongs to another user.
-	
-	// This one is permission based, not needed yet for Milestone 3
-//	public Applicant getApplicant(int id, String username) {
-//		Optional<Applicant> photo = dao.findById(id);
-//		if (photo.isEmpty()) {
-//			throw new NotFoundException("No photo with id " + id);
-//		}
-//		return photo.get();
-//	}
-	
-	// Get Applicant from Applicant ID
-	public Applicant getApplicantFromID (int id) {
-		Optional<Applicant> applicant = dao.findById(id);
+
+	// Row-level protected: ADMIN can view any applicant; APPLICANT can only view their own.
+	public Applicant getApplicantFromID(int id, User caller) {
+		Optional<Applicant> applicant = caller.isAdmin()
+				? dao.findById(id)
+				: dao.findByIdAndUsername(id, caller.username());
 		if (applicant.isEmpty()) {
 			throw new NotFoundException("No Applicant with id " + id);
 		}
 		return applicant.get();
 	}
-	
-	// Get all Applicants Sorted by Last Name
-	public List<Applicant> getAllApplicants() {
-		List<Applicant> applicants = new ApplicantDao().findAll();
+
+	// Role-based check: ADMIN only
+	public List<Applicant> getAllApplicants(User caller) {
+		UserService.requireAdmin(caller);
+		List<Applicant> applicants = dao.findAll();
 		if (applicants.isEmpty()) {
-			throw new NotFoundException ("No Applicants");
+			throw new NotFoundException("No Applicants");
 		}
 		return applicants;
 	}
-	
-	// Get All Applicants from Class Year
-	public List<Applicant> getAllApplicantsByClassYear(int classYear){
-		List<Applicant> applicants = new ApplicantDao().findByClassYear(classYear);
+
+	// Role-based check: ADMIN only
+	public List<Applicant> getAllApplicantsByClassYear(int classYear, User caller) {
+		UserService.requireAdmin(caller);
+		if (classYear < 2000 || classYear > 2040) {
+			throw new ValidationException("Class_Year must be between 2000 and 2040");
+		}
+		List<Applicant> applicants = dao.findByClassYear(classYear);
 		if (applicants.isEmpty()) {
-			throw new NotFoundException ("No Applicant with the Class Year of " + classYear);
+			throw new NotFoundException("No Applicant with the Class Year of " + classYear);
 		}
 		return applicants;
 	}
-	
-	// Create a new Applicant and return the Applicant ID
-	public Applicant createApplicant (NewApplicant req) {
-		int newId = dao.create(req);
-		return new Applicant (newId, req.First_Name(), req.Last_Name(), req.Class_Year());
+
+	// Any logged-in user can create an applicant profile; ownership is tied to caller.username().
+	public Applicant createApplicant(NewApplicant req, User caller) {
+		validateNewApplicant(req);
+		int newId = dao.create(req, caller.username());
+		return new Applicant(newId, req.First_Name().trim(), req.Last_Name().trim(), req.Class_Year());
 	}
-	
-	// Delete an applicant by Applicant ID
-	public void deleteApplicant (int id) {
-		if (!dao.delete(id)) {
-			throw new NotFoundException("No Applicant with ID: " + id);
+
+	// Row-level protected: ADMIN can update any applicant; APPLICANT can only update their own.
+	public Applicant updateApplicant(int id, NewApplicant req, User caller) {
+		validateNewApplicant(req);
+		boolean updated = caller.isAdmin()
+				? dao.update(id, req)
+				: dao.updateByUsername(id, caller.username(), req);
+		if (!updated) {
+			throw new NotFoundException("No Applicant with id " + id);
+		}
+		return new Applicant(id, req.First_Name().trim(), req.Last_Name().trim(), req.Class_Year());
+	}
+
+	// Row-level protected: ADMIN can delete any applicant; APPLICANT can only delete their own.
+	public void deleteApplicant(int id, User caller) {
+		boolean deleted = caller.isAdmin()
+				? dao.delete(id)
+				: dao.deleteByUsername(id, caller.username());
+		if (!deleted) {
+			throw new NotFoundException("No Applicant with id " + id);
 		}
 	}
-	
-	// Hires an Applicant (updates APPLICANT and inserts into STUDENT_HIRED)
-	public StudentHired hireApplicant (int id, HireRequest req) {
-		Optional<Integer> empId = dao.hireApplicant(id, req);
-		if (empId.isEmpty()) {
-			throw new NotFoundException ("No Applicant with ID: "+ id);
-		}
-		return new StudentHired(
-				empId.get(),
-				id,
-				req.Internship_Company(),
-				req.Office_City(),
-				req.Office_State(),
-				req.Office_Country(),
-				req.Education(),
-				req.Finance(),
-				req.Health(),
-				req.Media_Communications(),
-				req.Public_Service_Law_NonProfit_NGO(),
-				req.Intern_Title(),
-				req.Returning_Intern()
+
+	// Role-based check (ADMIN only) + Locking Read (SELECT ... FOR UPDATE) inside Transactions.run
+	public StudentHired hireApplicant(int id, HireRequest req, User caller) {
+		UserService.requireAdmin(caller);
+		validateHireRequest(req);
+
+		return Transactions.run(conn -> {
+			// 1. Locking read on APPLICANT row to prevent concurrent duplicate hires or race conditions
+			Optional<DecisionStatus> status = dao.findDecisionStatusForUpdate(conn, id);
+			if (status.isEmpty()) {
+				throw new NotFoundException("No Applicant with id " + id);
+			}
+			if (status.get().accepted() || status.get().rejected()) {
+				throw new ConflictException("Applicant " + id + " already has a finalized hiring decision");
+			}
+
+			// 2. Update APPLICANT and insert into STUDENT_HIRED atomically on the same connection
+			dao.markApplicantHired(conn, id);
+			int empId = dao.insertStudentHired(conn, id, req);
+
+			return new StudentHired(
+					empId,
+					id,
+					req.Internship_Company().trim(),
+					req.Office_City().trim(),
+					req.Office_State(),
+					req.Office_Country().trim(),
+					req.Education(),
+					req.Finance(),
+					req.Health(),
+					req.Media_Communications(),
+					req.Public_Service_Law_NonProfit_NGO(),
+					req.Intern_Title().trim(),
+					req.Returning_Intern()
 			);
+		});
 	}
-	
-	// Get all applications for a specific Applicant ID
-	public List<ApplicantApplication> getApplicationsByApplicantId (int id) {
-		List<ApplicantApplication> applications = dao.findApplicationByApplicantID(id);
+
+	// Row-level protected: ADMIN can view any applicant's applications; APPLICANT can only view their own.
+	public List<ApplicantApplication> getApplicationsByApplicantId(int id, User caller) {
+		List<ApplicantApplication> applications = caller.isAdmin()
+				? dao.findApplicationsByApplicantId(id)
+				: dao.findApplicationsByApplicantIdAndUsername(id, caller.username());
 		if (applications.isEmpty()) {
-			throw new NotFoundException ("No Applications found with Applicant ID: " + id);
+			throw new NotFoundException("No Applications found for Applicant with id " + id);
 		}
 		return applications;
 	}
-	
-	// Update an existing Applicant by ID. NotFoundException if there's no such applicant.
-	public Applicant updateApplicant(int id, NewApplicant req) {
-		if (!dao.update(id, req)) {
-			throw new NotFoundException("No Applicant with id " + id);
-		}
-		return new Applicant(id, req.First_Name(), req.Last_Name(), req.Class_Year());
-	}
 
-	// Get divisions with above-average applicant demand (Aggregation + Subquery)
-	public List<DivisionStats> getHighDemandDivisions() {
+	// Role-based check: ADMIN only
+	public List<DivisionStats> getHighDemandDivisions(User caller) {
+		UserService.requireAdmin(caller);
 		List<DivisionStats> stats = dao.findHighDemandDivisions();
 		if (stats.isEmpty()) {
 			throw new NotFoundException("No division analytics found");
 		}
 		return stats;
 	}
-	
-	// Get all finalized applicant decisions (Hired UNION Denied)
-	public List<ApplicantDecision> getAllDecisions() {
+
+	// Role-based check: ADMIN only
+	public List<ApplicantDecision> getAllDecisions(User caller) {
+		UserService.requireAdmin(caller);
 		List<ApplicantDecision> decisions = dao.findAllDecisions();
 		if (decisions.isEmpty()) {
 			throw new NotFoundException("No finalized applicant decisions found");
 		}
 		return decisions;
 	}
-	
+
+	// Service-layer input validation for creating/updating an Applicant (400 Bad Request)
+	private void validateNewApplicant(NewApplicant req) {
+		if (req == null) {
+			throw new ValidationException("Request body is required");
+		}
+		requireNonBlankMax(req.First_Name(), "First_Name", 50);
+		requireNonBlankMax(req.Last_Name(), "Last_Name", 50);
+		requireNonBlankMax(req.College(), "College", 100);
+		requireNonBlankMax(req.Division_Applied(), "Division_Applied", 50);
+		requireNonBlankMax(req.Intern_Title_Applied(), "Intern_Title_Applied", 50);
+		requireNonBlankMax(req.Email(), "email", 100);
+		if (!req.Email().contains("@")) {
+			throw new ValidationException("email must be a valid email address");
+		}
+		requireNonBlankMax(req.City(), "City", 50);
+		requireNonBlankMax(req.Zip_Code(), "Zip_Code", 20);
+		requireNonBlankMax(req.Street_Address(), "Street_Address", 100);
+		if (req.Class_Year() < 2000 || req.Class_Year() > 2040) {
+			throw new ValidationException("Class_Year must be between 2000 and 2040");
+		}
+		if (req.House_Number() <= 0) {
+			throw new ValidationException("HouseNumber must be a positive integer");
+		}
+	}
+
+	// Service-layer input validation for hiring an Applicant (400 Bad Request)
+	private void validateHireRequest(HireRequest req) {
+		if (req == null) {
+			throw new ValidationException("Request body is required");
+		}
+		requireNonBlankMax(req.Internship_Company(), "Internship_Company", 100);
+		requireNonBlankMax(req.Office_City(), "Office_City", 50);
+		requireNonBlankMax(req.Office_Country(), "Office_Country", 60);
+		requireNonBlankMax(req.Intern_Title(), "Intern_Title", 50);
+		if (req.Office_State() != null && req.Office_State().length() > 50) {
+			throw new ValidationException("Office_State can be at most 50 characters");
+		}
+	}
+
+	private void requireNonBlankMax(String value, String fieldName, int maxLength) {
+		if (value == null || value.isBlank()) {
+			throw new ValidationException(fieldName + " is required and cannot be blank");
+		}
+		if (value.trim().length() > maxLength) {
+			throw new ValidationException(fieldName + " can be at most " + maxLength + " characters");
+		}
+	}
 }
