@@ -1,34 +1,76 @@
 package internshipapp.routes;
+
+import java.util.Optional;
+
+import internshipapp.domain.User;
 import internshipapp.errors.UnauthorizedException;
+import internshipapp.service.SessionService;
 import io.javalin.config.JavalinConfig;
 import io.javalin.http.Context;
-/**
-* Works out whose album a request is for.
-*
-* For now the client simply names the user in an X-User header. Once login is
-* added, only register() changes (to read a token instead); routes keep calling
-* CurrentUser.get(ctx).
-*/
-public final class CurrentUser {
+import io.javalin.http.HandlerType;
+
+public class CurrentUser {
 	private static final String KEY = "currentUser";
-	private CurrentUser() {
-}
-// Set up a before handler to extract the current user from the
-// request.
-// Called from inside Javalin.create(config -> { ... })
-public static void register(JavalinConfig config) {
-	// beforeMatched runs before every request that matches a route
-	// (an unknown path still gets a 404, not a 401)
-	config.routes.beforeMatched(ctx -> {
-		String username = ctx.header("X-User");
-		if (username == null || username.isBlank()) {
-			throw new UnauthorizedException("X-User header is required");
+	private static final String BEARER = "Bearer ";
+
+	private final SessionService sessionService;
+
+	public CurrentUser(SessionService sessionService) {
+		this.sessionService = sessionService;
+	}
+
+	public void register(JavalinConfig config) {
+		config.routes.beforeMatched(ctx -> {
+			// If a token is provided (e.g., an Admin calling POST /users), resolve the user
+			Optional<String> token = bearerToken(ctx);
+			if (token.isPresent()) {
+				Optional<User> user = sessionService.userForToken(token.get());
+				if (user.isEmpty()) {
+					throw new UnauthorizedException("Login required");
+				}
+				ctx.attribute(KEY, user.get());
+				return;
+			}
+
+			// If no token is provided, only allow public routes
+			if (isPublic(ctx)) {
+				return;
+			}
+			throw new UnauthorizedException("Login required");
+		});
+	}
+
+	// Gets the current logged-in User object (with username and role)
+	public static User getUser(Context ctx) {
+		return ctx.attribute(KEY);
+	}
+
+	// Gets the current logged-in username string
+	public static String get(Context ctx) {
+		User user = ctx.attribute(KEY);
+		return user != null ? user.username() : null;
+	}
+
+	public static Optional<String> bearerToken(Context ctx) {
+		String header = ctx.header("Authorization");
+		if (header == null || !header.startsWith(BEARER)) {
+			return Optional.empty();
 		}
-		ctx.attribute(KEY, username.trim());
-	});
-}
-// The current user's username, as stored by the before handler.
-public static String get(Context ctx) {
-	return ctx.attribute(KEY);
+		return Optional.of(header.substring(BEARER.length()));
+	}
+
+	// Public endpoints that do not require logging in:
+	// - POST /users (self-registration as APPLICANT)
+	// - POST /login (logging in)
+	// - GET /posting and GET /postings/open (browsing internships publicly)
+	private static boolean isPublic(Context ctx) {
+		String path = ctx.path();
+		if (ctx.method().equals(HandlerType.POST)) {
+			return path.equals("/users") || path.equals("/login");
+		}
+		if (ctx.method().equals(HandlerType.GET)) {
+			return path.equals("/posting") || path.equals("/postings/open");
+		}
+		return false;
 	}
 }

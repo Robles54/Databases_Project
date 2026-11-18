@@ -16,6 +16,9 @@ import internshipapp.errors.ValidationException;
  * which changes between MySQL versions and languages.
  */
 public final class SqlErrors {
+	
+	private static final int DEADLOCK = 1213;
+	private static final int LOCK_WAIT_TIMEOUT = 1205;
 
 	private SqlErrors() {
 	}
@@ -40,6 +43,16 @@ public final class SqlErrors {
 		if (code == 1048 || code == 3819) {
 			return new ValidationException("Invalid value", e); // NOT NULL, CHECK
 		}
+		if (isRetryable(e)) {
+			return new UnavailableException("The internship server is busy; please try again", e);
+		}
 		return new AppException("Database error", e); // anything else: 500
+	}
+	
+	// True if MySQL abandoned the transaction because of other transactions
+	// running a deadlock again could work
+	public static boolean isRetryable(SQLException e) {
+		int code = e.getErrorCode();
+		return code == DEADLOCK || code == LOCK_WAIT_TIMEOUT;
 	}
 }
