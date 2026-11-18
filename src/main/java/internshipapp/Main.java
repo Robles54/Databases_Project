@@ -6,17 +6,23 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import internshipapp.dao.ApplicantDao;
 import internshipapp.dao.PostingDao;
+import internshipapp.dao.SessionDao;
+import internshipapp.dao.UserDao;
 import internshipapp.routes.ApplicantRoutes;
+import internshipapp.routes.AuthRoutes;
 import internshipapp.routes.CurrentUser;
 import internshipapp.routes.ErrorHandler;
 import internshipapp.routes.PostingRoutes;
+import internshipapp.routes.UserRoutes;
 import internshipapp.service.ApplicantService;
 import internshipapp.service.PostingService;
+import internshipapp.service.SessionService;
+import internshipapp.service.UserService;
 import io.javalin.Javalin;
 import io.javalin.json.JavalinJackson;
 
 /**
- * Starts the photo album API on port 7070.
+ * Starts the internship application API on port 7070.
  *
  * The only class that knows every layer: it builds them bottom-up and hands
  * each one the layer below.
@@ -24,17 +30,24 @@ import io.javalin.json.JavalinJackson;
 public class Main {
 
 	public static void main(String[] args) {
-		// TODO: create DAOs
+		// Create DAOs
+		UserDao userDao = new UserDao();
+		SessionDao sessionDao = new SessionDao();
 		ApplicantDao applicantDao = new ApplicantDao();
 		PostingDao postingDao = new PostingDao();
 
-		// TODO: create services
+		// Create services (SessionService first, since UserService and CurrentUser need it)
+		SessionService sessionService = new SessionService(sessionDao);
+		UserService userService = new UserService(userDao, sessionService);
 		ApplicantService applicantService = new ApplicantService(applicantDao);
 		PostingService postingService = new PostingService(postingDao);
 
-		// TODO: create routes
-		ApplicantRoutes applicantRoutes = new ApplicantRoutes (applicantService);
-		PostingRoutes postingRoutes = new PostingRoutes (postingService);
+		// Create auth filter and routes
+		CurrentUser currentUser = new CurrentUser(sessionService);
+		UserRoutes userRoutes = new UserRoutes(userService);
+		AuthRoutes authRoutes = new AuthRoutes(userService, sessionService);
+		ApplicantRoutes applicantRoutes = new ApplicantRoutes(applicantService);
+		PostingRoutes postingRoutes = new PostingRoutes(postingService);
 
 		// Javalin 7: all configuration and routes go inside the config block
 		Javalin.create(config -> {
@@ -51,10 +64,12 @@ public class Main {
 			// One place turns every exception into a status code and error JSON
 			ErrorHandler.register(config);
 			
-			// Every route needs to know whose album the request is for
-			CurrentUser.register(config);
+			// Every non-public route needs a valid session token
+			currentUser.register(config);
 
-			// TODO: register routes
+			// Register routes
+			userRoutes.register(config);
+			authRoutes.register(config);
 			applicantRoutes.register(config);
 			postingRoutes.register(config);
 			

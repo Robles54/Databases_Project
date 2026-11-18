@@ -1,3 +1,3 @@
-CURRENT STATUS: UNFUNCTIONAL.
+CURRENT STATUS: FUNCTIONAL.
 
-Main.java is still not linked with the new Endpoint updates that I implemented on November 17-18
+Main.java now updated and linked with updated classes.
